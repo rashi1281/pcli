@@ -2,6 +2,7 @@ package internal
 
 import (
 	"encoding/json"
+	"fmt"
 	"os/exec"
 	"strings"
 
@@ -31,7 +32,6 @@ func AutoCompleteLogGroups(cmd *cobra.Command, args []string, toComplete string)
 			return nil, cobra.ShellCompDirectiveNoFileComp
 		}
 
-		toComplete = strings.ToLower(toComplete)
 		logGroup = make([]string, len(resp.LogGroups))
 		for i, lg := range resp.LogGroups {
 			logGroup[i] = lg.LogGroupName
@@ -41,6 +41,7 @@ func AutoCompleteLogGroups(cmd *cobra.Command, args []string, toComplete string)
 	}
 
 	var suggestions []string
+	toComplete = strings.ToLower(toComplete)
 	for _, lg := range logGroup {
 		name := lg
 		// case-insensitive substring match
@@ -50,4 +51,26 @@ func AutoCompleteLogGroups(cmd *cobra.Command, args []string, toComplete string)
 	}
 
 	return suggestions, cobra.ShellCompDirectiveNoFileComp
+}
+
+func CacheLogGroups() error {
+	out, err := exec.Command("aws", "logs", "describe-log-groups", "--output", "json").Output()
+	if err != nil {
+		return fmt.Errorf("error describing log groups: %w", err)
+	}
+
+	var resp logGroupsResponse
+	if err := json.Unmarshal(out, &resp); err != nil {
+		return fmt.Errorf("error unmarshalling log groups: %w", err)
+	}
+
+	logGroups := make([]string, len(resp.LogGroups))
+	for i, lg := range resp.LogGroups {
+		logGroups[i] = lg.LogGroupName
+	}
+	viper.Set("cache.log_groups", logGroups)
+	if err := viper.WriteConfig(); err != nil {
+		return fmt.Errorf("failed to persist log groups cache: %w", err)
+	}
+	return nil
 }
